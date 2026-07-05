@@ -216,18 +216,6 @@
     </div>
 
     <div class="field">
-      <label>Categoría</label>
-      <select id="categoria">
-        <option value="Infraestructura">Infraestructura</option>
-        <option value="Vegetación">Vegetación</option>
-        <option value="Fauna">Fauna</option>
-        <option value="Hidrología">Hidrología</option>
-        <option value="Suelo">Suelo</option>
-        <option value="Otro">Otro</option>
-      </select>
-    </div>
-
-    <div class="field">
       <label>Fecha y hora de captura</label>
       <div class="datetime" id="datetimeBox">—</div>
     </div>
@@ -246,7 +234,7 @@
     <div class="status" id="status"></div>
   </form>
 
-  <footer>Datos capturados con precisión GPS del dispositivo · <a href="mapa.html">Ver mapa de registros →</a></footer>
+  <footer>Datos capturados con precisión GPS del dispositivo · <a href="mapa-central.html">Ver mapa de registros →</a></footer>
 </div>
 
 <!-- Iframe oculto usado para enviar a Google Forms sin recargar la página -->
@@ -257,19 +245,21 @@
    CONFIGURACIÓN — reemplaza estos valores con los de tu propio proyecto
    ==================================================================== */
 const CONFIG = {
-  // URL de envío de tu Google Form. Se obtiene reemplazando "viewform"
-  // por "formResponse" en el enlace de tu formulario.
-  GOOGLE_FORM_ACTION: "https://docs.google.com/forms/d/e/TU_FORM_ID/formResponse",
+  // URL real de tu formulario.
+  GOOGLE_FORM_ACTION: "https://docs.google.com/forms/d/e/1FAIpQLSfmM0Z0QTo0OYbYWvqrsx6Nco6yKhvv_RpfCX8O4OJUu5EPwQ/formResponse",
 
-  // IDs de entrada (entry.xxxxxxxxx) de cada pregunta del formulario.
+  // IDs de entrada reales de tu formulario.
   ENTRY: {
-    nombre:      "entry.111111111",
-    descripcion: "entry.222222222",
-    categoria:   "entry.333333333",
-    fechaHora:   "entry.444444444",
-    latitud:     "entry.555555555",
-    longitud:    "entry.666666666",
-    fotoUrl:     "entry.777777777"
+    nombre:       "entry.786287750",
+    descripcion:  "entry.473747079",
+    latitud:      "entry.1951254240",
+    longitud:     "entry.1143552526",
+    foto:         "entry.903131744",
+    hora_hour:    "entry.2030021798_hour",
+    hora_minute:  "entry.2030021798_minute",
+    fecha_year:   "entry.1536659632_year",
+    fecha_month:  "entry.1536659632_month",
+    fecha_day:    "entry.1536659632_day"
   },
 
   // ImgBB: contenedor en línea para las fotos. Entra a api.imgbb.com,
@@ -428,7 +418,7 @@ document.getElementById('captureForm').addEventListener('submit', async (e) => {
       fotoUrl = await uploadPhoto(file);
     }
 
-    const fechaHora = stampDateTime();
+    const now = new Date();
 
     // Construir formulario oculto que apunta a Google Forms
     const gForm = document.createElement('form');
@@ -439,11 +429,14 @@ document.getElementById('captureForm').addEventListener('submit', async (e) => {
     const values = {
       [CONFIG.ENTRY.nombre]: document.getElementById('nombre').value.trim(),
       [CONFIG.ENTRY.descripcion]: document.getElementById('descripcion').value.trim(),
-      [CONFIG.ENTRY.categoria]: document.getElementById('categoria').value,
-      [CONFIG.ENTRY.fechaHora]: fechaHora,
       [CONFIG.ENTRY.latitud]: coords.lat,
       [CONFIG.ENTRY.longitud]: coords.lng,
-      [CONFIG.ENTRY.fotoUrl]: fotoUrl
+      [CONFIG.ENTRY.foto]: fotoUrl,
+      [CONFIG.ENTRY.hora_hour]: now.getHours(),
+      [CONFIG.ENTRY.hora_minute]: now.getMinutes(),
+      [CONFIG.ENTRY.fecha_year]: now.getFullYear(),
+      [CONFIG.ENTRY.fecha_month]: now.getMonth()+1,
+      [CONFIG.ENTRY.fecha_day]: now.getDate()
     };
 
     for(const key in values){
