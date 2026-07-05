@@ -216,8 +216,8 @@ const CONFIG = {
   // Datos de la hoja de respuestas (Google Sheets) para dibujar los
   // registros existentes en el mapa. Comparte la hoja como
   // "Cualquiera con el enlace: Lector".
-  SHEET_ID: "TU_SHEET_ID",
-  SHEET_NAME: "Respuestas de formulario 1",
+  SHEET_ID: "1XEJHMlpU8sAbzMxiUv1mCktXB4VJ9bQI4T3P43en27o",
+  SHEET_GID: "2043451589", // tomado del &gid= en tu URL de Sheets
 
   // Columnas tal como Google Forms las escribe en la hoja (orden de
   // creación de las preguntas). Ajusta si el orden real difiere.
@@ -254,7 +254,7 @@ async function loadRecords(){
     return;
   }
   try{
-    const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(CONFIG.SHEET_NAME)}`;
+    const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&gid=${CONFIG.SHEET_GID}`;
     const res = await fetch(url);
     const text = await res.text();
     const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}')+1));
