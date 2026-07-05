@@ -123,8 +123,24 @@
   }
 
   .popup-card{width:200px;font-family:'Inter',sans-serif;}
-  .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block;background:#eee;opacity:0;transition:opacity .25s;}
+  .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block;background:#eee;opacity:0;transition:opacity .25s;cursor:pointer;}
   .popup-card img.loaded{opacity:1;}
+
+  /* Visor de foto (lightbox) */
+  .lightbox-overlay{
+    position:fixed;inset:0;z-index:1000;background:rgba(12,18,14,.92);
+    display:none;align-items:center;justify-content:center;flex-direction:column;
+    padding:20px;
+  }
+  .lightbox-overlay.open{display:flex;}
+  .lightbox-overlay img{max-width:100%;max-height:75vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.5);}
+  .lightbox-actions{display:flex;gap:10px;margin-top:16px;}
+  .lightbox-actions a, .lightbox-actions button{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:14px;padding:10px 18px;
+    border-radius:10px;border:none;cursor:pointer;text-decoration:none;
+  }
+  .lightbox-actions a{background:var(--ochre);color:#fff;}
+  .lightbox-actions button{background:rgba(255,255,255,.12);color:#fff;}
   .popup-card h3{font-size:13.5px;margin:2px 0 4px;color:var(--forest-dark);}
   .popup-card p{font-size:12px;color:var(--ink-soft);margin:0 0 6px;line-height:1.4;}
   .popup-card .meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:5px;}
@@ -146,6 +162,14 @@
 
 <button class="fab locate" id="locateBtn" title="Centrar en mi ubicación">◎</button>
 <button class="fab" id="openSheetBtn" title="Nuevo registro">+</button>
+
+<div class="lightbox-overlay" id="lightbox">
+  <img id="lightboxImg" src="" alt="Foto del registro">
+  <div class="lightbox-actions">
+    <a id="lightboxDownload" href="#" download target="_blank">⬇ Descargar</a>
+    <button type="button" onclick="closeLightbox()">✕ Cerrar</button>
+  </div>
+</div>
 
 <div class="sheet-backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet">
@@ -233,6 +257,19 @@ const CONFIG = {
 
 let coords = null;
 
+// ---------- Visor de foto (lightbox) ----------
+window.openLightbox = function(url){
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightboxDownload').href = url;
+  document.getElementById('lightbox').classList.add('open');
+};
+window.closeLightbox = function(){
+  document.getElementById('lightbox').classList.remove('open');
+};
+document.getElementById('lightbox').addEventListener('click', (e) => {
+  if(e.target.id === 'lightbox') closeLightbox();
+});
+
 // ---------- Mapa (eje central de la pantalla) ----------
 const map = L.map('map', {zoomControl:false}).setView([-12.05,-77.04], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -248,6 +285,32 @@ function makeIcon(color){
     className:'', html:`<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);"></div>`,
     iconSize:[16,16], iconAnchor:[8,8]
   });
+}
+
+// Google Sheets exporta las celdas de Fecha/Hora como texto tipo
+// "Date(2026,6,5)" o "Date(1899,11,30,9,44,0)" (mes en base 0). Estas
+// funciones lo convierten a un formato legible.
+function parseGvizDate(str){
+  if(!str) return null;
+  const m = String(str).match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
+  if(!m) return null;
+  return {
+    year: +m[1], month: +m[2], day: +m[3],
+    hour: m[4] !== undefined ? +m[4] : null,
+    minute: m[5] !== undefined ? +m[5] : null
+  };
+}
+function formatFecha(str){
+  const d = parseGvizDate(str);
+  if(!d) return str || "";
+  const pad = n => String(n).padStart(2,'0');
+  return `${pad(d.day)}/${pad(d.month+1)}/${d.year}`;
+}
+function formatHora(str){
+  const d = parseGvizDate(str);
+  if(!d || d.hour === null) return str || "";
+  const pad = n => String(n).padStart(2,'0');
+  return `${pad(d.hour)}:${pad(d.minute)}`;
 }
 
 async function loadRecords(){
@@ -276,13 +339,13 @@ async function loadRecords(){
       if(lat < b.minLat || lat > b.maxLat || lng < b.minLng || lng > b.maxLng) return;
       const marker = L.marker([lat,lng], {icon: makeIcon('#C9862F')});
       const foto = get(CONFIG.COL.foto);
-      const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}" loading="lazy" onload="this.classList.add('loaded')">` : "";
+      const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}" loading="lazy" onload="this.classList.add('loaded')" onclick="openLightbox('${foto}')">` : "";
       marker.bindPopup(`
         <div class="popup-card">
           ${imgHtml}
           <h3>${get(CONFIG.COL.nombre) || 'Sin nombre'}</h3>
           <p>${get(CONFIG.COL.descripcion) || ''}</p>
-          <div class="meta">📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>🕒 ${get(CONFIG.COL.fecha)} ${get(CONFIG.COL.hora)}</div>
+          <div class="meta">📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>🕒 ${formatFecha(get(CONFIG.COL.fecha))} ${formatHora(get(CONFIG.COL.hora))}</div>
         </div>`);
       clusterGroup.addLayer(marker);
       bounds.push([lat,lng]); plotted++;
