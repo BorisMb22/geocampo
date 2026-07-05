@@ -363,8 +363,15 @@ function fileToBase64(file){
 }
 
 async function uploadPhoto(file){
+  // Si no configuraste el Apps Script (ver README, paso 3), no intentamos
+  // la subida real a Drive y usamos solo el nombre del archivo como valor,
+  // para no bloquear el envío del formulario.
+  const scriptUrl = CONFIG.APPS_SCRIPT_URL || "";
+  if(!scriptUrl || scriptUrl.includes("TU_SCRIPT_ID")){
+    return file.name;
+  }
   const base64 = await fileToBase64(file);
-  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+  const res = await fetch(scriptUrl, {
     method: "POST",
     headers: {"Content-Type": "text/plain;charset=utf-8"}, // evita preflight CORS
     body: JSON.stringify({
