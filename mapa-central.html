@@ -123,7 +123,8 @@
   }
 
   .popup-card{width:200px;font-family:'Inter',sans-serif;}
-  .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block;background:#eee;}
+  .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block;background:#eee;opacity:0;transition:opacity .25s;}
+  .popup-card img.loaded{opacity:1;}
   .popup-card h3{font-size:13.5px;margin:2px 0 4px;color:var(--forest-dark);}
   .popup-card p{font-size:12px;color:var(--ink-soft);margin:0 0 6px;line-height:1.4;}
   .popup-card .meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:5px;}
@@ -220,6 +221,12 @@ const CONFIG = {
 
   // Orden real de columnas en tu hoja: Marca temporal, Nombre,
   // Descripción, Latitud, Longitud, Fecha, Hora, Fotografía.
+  // Zona de trabajo esperada (ajusta si registras fuera de Perú). Cualquier
+  // fila con coordenadas fuera de este rectángulo se ignora al dibujar el
+  // mapa — así datos de prueba con valores como "12" o "121" no arruinan
+  // la vista general.
+  VALID_BOUNDS: {minLat:-19, maxLat:0.5, minLng:-82, maxLng:-68},
+
   COL: {timestamp:0, nombre:1, descripcion:2, lat:3, lng:4, fecha:5, hora:6, foto:7}
 };
 /* ======================================================================== */
@@ -264,10 +271,12 @@ async function loadRecords(){
       // Ignora filas con coordenadas inválidas (ej. datos de prueba como
       // "121" o "123123"), que harían que el mapa se aleje hasta ver
       // todo el planeta al calcular los límites.
-      if(isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
+      if(isNaN(lat) || isNaN(lng)) return;
+      const b = CONFIG.VALID_BOUNDS;
+      if(lat < b.minLat || lat > b.maxLat || lng < b.minLng || lng > b.maxLng) return;
       const marker = L.marker([lat,lng], {icon: makeIcon('#C9862F')});
       const foto = get(CONFIG.COL.foto);
-      const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}">` : "";
+      const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}" loading="lazy" onload="this.classList.add('loaded')">` : "";
       marker.bindPopup(`
         <div class="popup-card">
           ${imgHtml}
@@ -389,14 +398,40 @@ function fileToBase64(file){
   });
 }
 
+// Reduce el tamaño de la foto antes de subirla, para que cargue rápido
+// en el popup del mapa incluso con datos móviles (las fotos de celular
+// pueden pesar 3-8 MB; esto las deja normalmente en 200-400 KB).
+function compressImage(file, maxWidth = 1600, quality = 0.75){
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => {
+        if(!blob){ resolve(file); return; } // si falla, sube el original
+        resolve(new File([blob], file.name, {type: 'image/jpeg'}));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => resolve(file); // si falla, sube el original sin comprimir
+    img.src = url;
+  });
+}
+
 async function resolvePhotoValue(file){
   if(!file) return "";
   const apiKey = CONFIG.IMGBB_API_KEY || "";
   if(!apiKey || apiKey.includes("TU_IMGBB_API_KEY")){
     return file.name; // fallback: solo el nombre, mientras no configures ImgBB
   }
+  const compressed = await compressImage(file);
   const formData = new FormData();
-  formData.append("image", file);
+  formData.append("image", compressed);
   const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
     method: "POST",
     body: formData
