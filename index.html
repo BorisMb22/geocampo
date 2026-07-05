@@ -272,8 +272,9 @@ const CONFIG = {
     fotoUrl:     "entry.777777777"
   },
 
-  // URL del Web App de Apps Script que sube la foto a Drive y devuelve el enlace público.
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/TU_SCRIPT_ID/exec"
+  // ImgBB: contenedor en línea para las fotos. Entra a api.imgbb.com,
+  // inicia sesión, y copia la API key que aparece en esa misma página.
+  IMGBB_API_KEY: "50081b96a4a13b7ddcd0e0be9e162d84"
 };
 /* ==================================================================== */
 
@@ -363,26 +364,23 @@ function fileToBase64(file){
 }
 
 async function uploadPhoto(file){
-  // Si no configuraste el Apps Script (ver README, paso 3), no intentamos
-  // la subida real a Drive y usamos solo el nombre del archivo como valor,
-  // para no bloquear el envío del formulario.
-  const scriptUrl = CONFIG.APPS_SCRIPT_URL || "";
-  if(!scriptUrl || scriptUrl.includes("TU_SCRIPT_ID")){
+  // Si no configuraste ImgBB, no intentamos la subida real y usamos
+  // solo el nombre del archivo, para no bloquear el envío del formulario.
+  const apiKey = CONFIG.IMGBB_API_KEY || "";
+  if(!apiKey || apiKey.includes("TU_IMGBB_API_KEY")){
     return file.name;
   }
-  const base64 = await fileToBase64(file);
-  const res = await fetch(scriptUrl, {
+
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
     method: "POST",
-    headers: {"Content-Type": "text/plain;charset=utf-8"}, // evita preflight CORS
-    body: JSON.stringify({
-      base64,
-      filename: file.name,
-      mimeType: file.type
-    })
+    body: formData
   });
   const data = await res.json();
-  if(!data.success) throw new Error(data.error || "Fallo al subir la foto");
-  return data.url;
+  if(!data.success) throw new Error(data.error?.message || "Fallo al subir la foto a ImgBB");
+  return data.data.url;
 }
 
 function setStatus(kind, text){
