@@ -207,11 +207,9 @@ const CONFIG = {
     fecha_day:    "entry.1536659632_day"
   },
 
-  // (Opcional) Web App de Apps Script para subir la foto real a Drive y
-  // obtener un enlace público — ver README. Si lo dejas con el valor por
-  // defecto, se guardará solo el nombre del archivo como en tu campo de
-  // ejemplo ("foto1").
-  APPS_SCRIPT_URL: "",
+  // ImgBB: contenedor en línea para las fotos. Entra a api.imgbb.com,
+  // inicia sesión, y copia la API key que aparece en esa misma página.
+  IMGBB_API_KEY: "50081b96a4a13b7ddcd0e0be9e162d84",
 
   // Datos de la hoja de respuestas (Google Sheets) para dibujar los
   // registros existentes en el mapa. Comparte la hoja como
@@ -397,15 +395,19 @@ function fileToBase64(file){
 
 async function resolvePhotoValue(file){
   if(!file) return "";
-  if(!CONFIG.APPS_SCRIPT_URL) return file.name; // fallback: solo el nombre, como tu ejemplo "foto1"
-  const base64 = await fileToBase64(file);
-  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
-    method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body: JSON.stringify({base64, filename:file.name, mimeType:file.type})
+  const apiKey = CONFIG.IMGBB_API_KEY || "";
+  if(!apiKey || apiKey.includes("TU_IMGBB_API_KEY")){
+    return file.name; // fallback: solo el nombre, mientras no configures ImgBB
+  }
+  const formData = new FormData();
+  formData.append("image", file);
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+    method: "POST",
+    body: formData
   });
   const data = await res.json();
-  if(!data.success) throw new Error(data.error || "Fallo al subir la foto");
-  return data.url;
+  if(!data.success) throw new Error(data.error?.message || "Fallo al subir la foto a ImgBB");
+  return data.data.url;
 }
 
 function setStatus(kind, text){
