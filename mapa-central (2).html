@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>GeoCampo · Registro en mapa</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<style>
+  :root{
+    --forest:#1F3A2E; --forest-dark:#12261D; --ochre:#C9862F; --ochre-light:#E6A94F;
+    --stone:#EAE7DD; --paper:#FFFFFF; --ink:#22261F; --ink-soft:#5B6058; --line:#D8D3C4;
+    --danger:#B3462F; --ok:#2F6B4E;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:'Inter',sans-serif;color:var(--ink);}
+
+  /* ===== El mapa es el eje central: ocupa toda la pantalla ===== */
+  #map{position:absolute;inset:0;z-index:0;}
+
+  /* ===== Barra superior flotante, mínima ===== */
+  .topbar{
+    position:absolute; top:calc(10px + var(--safe-top)); left:10px; right:10px; z-index:20;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    pointer-events:none;
+  }
+  .brand{
+    background:rgba(18,38,29,.92); color:#fff; padding:8px 14px; border-radius:999px;
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.06em;
+    display:flex; align-items:center; gap:8px; pointer-events:auto;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+  }
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--ochre-light);animation:pulse 1.6s infinite;}
+  .brand .dot.locked{animation:none;background:#7CD9A5;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(230,169,79,.55)}70%{box-shadow:0 0 0 8px rgba(230,169,79,0)}100%{box-shadow:0 0 0 0 rgba(230,169,79,0)}}
+
+  .count-pill{
+    background:rgba(255,255,255,.95); color:var(--forest-dark); padding:8px 14px; border-radius:999px;
+    font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:600; pointer-events:auto;
+    box-shadow:0 4px 14px rgba(0,0,0,.15);
+  }
+
+  /* ===== Botón flotante para abrir el formulario ===== */
+  .fab{
+    position:absolute; right:16px; bottom:calc(24px + var(--safe-bottom)); z-index:20;
+    width:60px; height:60px; border-radius:50%; background:var(--ochre); color:#fff; border:none;
+    font-size:28px; box-shadow:0 8px 22px rgba(0,0,0,.3); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fab:active{transform:scale(.94);}
+  .fab.locate{
+    right:16px; bottom:calc(96px + var(--safe-bottom)); background:var(--paper); color:var(--forest);
+    width:46px;height:46px;font-size:18px;
+  }
+
+  /* ===== Hoja inferior (bottom sheet) con el formulario ===== */
+  .sheet-backdrop{
+    position:fixed; inset:0; background:rgba(18,26,20,.45); z-index:29;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .sheet-backdrop.open{opacity:1; pointer-events:auto;}
+
+  .sheet{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    background:var(--paper); border-radius:20px 20px 0 0;
+    max-height:88vh; overflow-y:auto;
+    transform:translateY(100%); transition:transform .28s cubic-bezier(.32,.72,0,1);
+    padding:14px 20px calc(20px + var(--safe-bottom));
+    box-shadow:0 -10px 30px rgba(0,0,0,.25);
+  }
+  .sheet.open{transform:translateY(0);}
+  .grabber{width:40px;height:5px;background:var(--line);border-radius:99px;margin:0 auto 14px;}
+
+  .sheet h2{font-family:'Fraunces',serif;font-size:22px;margin:0 0 4px;color:var(--forest-dark);}
+  .sheet .sub{font-size:13px;color:var(--ink-soft);margin:0 0 16px;}
+
+  .field{margin-bottom:16px;}
+  label{display:block;font-size:13px;font-weight:600;color:var(--forest-dark);margin-bottom:6px;}
+  label .req{color:var(--danger);}
+  input[type="text"], textarea{
+    width:100%; font-family:'Inter',sans-serif; font-size:15px; padding:11px 13px;
+    border:1.5px solid var(--line); border-radius:10px; background:#FBFAF7; color:var(--ink);
+  }
+  input:focus, textarea:focus{outline:none;border-color:var(--forest);background:#fff;}
+  textarea{resize:vertical;min-height:70px;}
+  .error-msg{font-size:12px;color:var(--danger);margin-top:5px;display:none;}
+  .field.invalid input, .field.invalid textarea{border-color:var(--danger);}
+  .field.invalid .error-msg{display:block;}
+
+  .gps-line{
+    font-family:'JetBrains Mono',monospace; font-size:12.5px; background:#F1EEE3;
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px; color:var(--ink-soft);
+    margin-bottom:16px; display:flex; align-items:center; gap:8px;
+  }
+
+  .photo-box{
+    border:1.5px dashed var(--line); border-radius:12px; padding:14px; text-align:center;
+    background:#FBFAF7; cursor:pointer;
+  }
+  .photo-box input{display:none;}
+  #preview{max-width:100%;max-height:160px;border-radius:8px;margin-top:10px;display:none;}
+  .photo-label{font-size:13px;color:var(--ink-soft);}
+
+  button.submit{
+    width:100%; background:var(--ochre); color:#fff; border:none; font-weight:700; font-size:15px;
+    padding:15px; border-radius:12px; cursor:pointer; margin-top:6px;
+  }
+  button.submit:disabled{background:#C9BFA9;}
+
+  .status{margin-top:12px;font-size:13px;padding:11px 13px;border-radius:10px;display:none;}
+  .status.show{display:block;}
+  .status.ok{background:#EAF5EE;color:var(--ok);border:1px solid #BFE3CC;}
+  .status.err{background:#FBEAE6;color:var(--danger);border:1px solid #EFC4B7;}
+  .status.loading{background:#F1EEE3;color:var(--ink-soft);border:1px solid var(--line);}
+
+  .close-x{
+    position:absolute; top:12px; right:16px; background:none; border:none; font-size:22px;
+    color:var(--ink-soft); cursor:pointer; line-height:1;
+  }
+
+  .popup-card{width:200px;font-family:'Inter',sans-serif;}
+  .popup-card img{width:100%;height:120px;object-fit:cover;border-radius:8px;margin-bottom:6px;display:block;background:#eee;}
+  .popup-card h3{font-size:13.5px;margin:2px 0 4px;color:var(--forest-dark);}
+  .popup-card p{font-size:12px;color:var(--ink-soft);margin:0 0 6px;line-height:1.4;}
+  .popup-card .meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:5px;}
+  .leaflet-popup-content-wrapper{border-radius:12px;}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="topbar">
+  <div class="brand"><span class="dot" id="gpsDot"></span> GeoCampo</div>
+  <div class="count-pill" id="countPill">Cargando…</div>
+</div>
+
+<div id="insecureBanner" style="display:none;position:absolute;top:calc(56px + var(--safe-top));left:10px;right:10px;z-index:25;background:#B3462F;color:#fff;padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.4;box-shadow:0 6px 16px rgba(0,0,0,.25);">
+  ⚠️ Este archivo se abrió sin <b>https://</b>. Los navegadores móviles bloquean el GPS fuera de una conexión segura. Sube este archivo a GitHub Pages (o cualquier hosting con https) y ábrelo desde ese enlace.
+</div>
+
+<button class="fab locate" id="locateBtn" title="Centrar en mi ubicación">◎</button>
+<button class="fab" id="openSheetBtn" title="Nuevo registro">+</button>
+
+<div class="sheet-backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet">
+  <button class="close-x" id="closeSheetBtn">✕</button>
+  <div class="grabber"></div>
+  <h2>Nuevo registro</h2>
+  <p class="sub">Tu ubicación y hora se capturan automáticamente.</p>
+
+  <div class="gps-line" id="gpsLine">Buscando señal GPS…</div>
+
+  <form id="captureForm">
+    <div class="field" id="field-nombre">
+      <label for="nombre">Nombre del registrador <span class="req">*</span></label>
+      <input type="text" id="nombre" placeholder="Ej. Boris Medin" autocomplete="name">
+      <div class="error-msg">Ingresa tu nombre.</div>
+    </div>
+
+    <div class="field" id="field-descripcion">
+      <label for="descripcion">Descripción del registro <span class="req">*</span></label>
+      <textarea id="descripcion" placeholder="Describe lo observado…"></textarea>
+      <div class="error-msg">Agrega una descripción.</div>
+    </div>
+
+    <div class="field">
+      <label>Fotografía</label>
+      <div class="photo-box" id="photoBox">
+        <input type="file" id="foto" accept="image/*" capture="environment">
+        <span class="photo-label">Toca para tomar una foto o elegir de la galería</span>
+        <img id="preview" alt="Vista previa">
+      </div>
+    </div>
+
+    <button type="submit" class="submit" id="submitBtn">Enviar registro</button>
+    <div class="status" id="status"></div>
+  </form>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+/* ========================================================================
+   CONFIGURACIÓN
+   ======================================================================== */
+const CONFIG = {
+  GOOGLE_FORM_ACTION: "https://docs.google.com/forms/d/e/1FAIpQLSfmM0Z0QTo0OYbYWvqrsx6Nco6yKhvv_RpfCX8O4OJUu5EPwQ/formResponse",
+
+  // IDs de entrada tomados directamente de tu formulario real.
+  // Se quitaron Latitud (entry.1951254240) y Longitud (entry.1143552526)
+  // como preguntas independientes, tal como pediste. Las coordenadas
+  // siguen capturándose por GPS y se envían integradas al final de la
+  // Descripción (así no se pierden para el mapa).
+  ENTRY: {
+    nombre:       "entry.786287750",
+    descripcion:  "entry.473747079",
+    foto:         "entry.903131744",
+    hora_hour:    "entry.2030021798_hour",
+    hora_minute:  "entry.2030021798_minute",
+    fecha_year:   "entry.1536659632_year",
+    fecha_month:  "entry.1536659632_month",
+    fecha_day:    "entry.1536659632_day"
+  },
+
+  // (Opcional) Web App de Apps Script para subir la foto real a Drive y
+  // obtener un enlace público — ver README. Si lo dejas con el valor por
+  // defecto, se guardará solo el nombre del archivo como en tu campo de
+  // ejemplo ("foto1").
+  APPS_SCRIPT_URL: "",
+
+  // Datos de la hoja de respuestas (Google Sheets) para dibujar los
+  // registros existentes en el mapa. Comparte la hoja como
+  // "Cualquiera con el enlace: Lector".
+  SHEET_ID: "TU_SHEET_ID",
+  SHEET_NAME: "Respuestas de formulario 1",
+
+  // Columnas tal como Google Forms las escribe en la hoja (orden de
+  // creación de las preguntas). Ajusta si el orden real difiere.
+  // Con Latitud y Longitud eliminadas del formulario, el orden real de
+  // columnas en la hoja queda: Marca temporal, Nombre, Descripción,
+  // Fecha, Hora, Fotografía. Las coordenadas se extraen del texto de la
+  // Descripción (se agregan automáticamente al enviar, ver más abajo).
+  COL: {timestamp:0, nombre:1, descripcion:2, fecha:3, hora:4, foto:5}
+};
+/* ======================================================================== */
+
+let coords = null;
+
+// ---------- Mapa (eje central de la pantalla) ----------
+const map = L.map('map', {zoomControl:false}).setView([-12.05,-77.04], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; OpenStreetMap', maxZoom:19
+}).addTo(map);
+L.control.zoom({position:'bottomleft'}).addTo(map);
+
+const clusterGroup = L.markerClusterGroup();
+map.addLayer(clusterGroup);
+
+function makeIcon(color){
+  return L.divIcon({
+    className:'', html:`<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);"></div>`,
+    iconSize:[16,16], iconAnchor:[8,8]
+  });
+}
+
+async function loadRecords(){
+  if(CONFIG.SHEET_ID === "TU_SHEET_ID"){
+    document.getElementById('countPill').textContent = "Configura SHEET_ID";
+    return;
+  }
+  try{
+    const url = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(CONFIG.SHEET_NAME)}`;
+    const res = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(text.indexOf('{'), text.lastIndexOf('}')+1));
+    const rows = json.table.rows || [];
+    clusterGroup.clearLayers();
+    const bounds = []; let plotted = 0;
+    rows.forEach(row => {
+      const c = row.c;
+      const get = i => (c[i] && c[i].v !== null) ? c[i].v : "";
+      const descripcionFull = get(CONFIG.COL.descripcion) || "";
+      const gpsMatch = descripcionFull.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+      if(!gpsMatch) return;
+      const lat = parseFloat(gpsMatch[1]);
+      const lng = parseFloat(gpsMatch[2]);
+      if(isNaN(lat) || isNaN(lng)) return;
+      const descripcionLimpia = descripcionFull.replace(/\s*\|?\s*GPS:.*$/,'').trim();
+      const marker = L.marker([lat,lng], {icon: makeIcon('#C9862F')});
+      const foto = get(CONFIG.COL.foto);
+      const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}">` : "";
+      marker.bindPopup(`
+        <div class="popup-card">
+          ${imgHtml}
+          <h3>${get(CONFIG.COL.nombre) || 'Sin nombre'}</h3>
+          <p>${descripcionLimpia}</p>
+          <div class="meta">📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>🕒 ${get(CONFIG.COL.fecha)} ${get(CONFIG.COL.hora)}</div>
+        </div>`);
+      clusterGroup.addLayer(marker);
+      bounds.push([lat,lng]); plotted++;
+    });
+    document.getElementById('countPill').textContent = `${plotted} registro${plotted===1?'':'s'}`;
+    if(bounds.length) map.fitBounds(bounds, {padding:[50,50], maxZoom:16});
+  }catch(err){
+    document.getElementById('countPill').textContent = "Sin datos";
+    console.error(err);
+  }
+}
+loadRecords();
+setInterval(loadRecords, 60000);
+
+// ---------- Geolocalización ----------
+const gpsDot = document.getElementById('gpsDot');
+const gpsLine = document.getElementById('gpsLine');
+const insecureBanner = document.getElementById('insecureBanner');
+let userMarker = null;
+let userAccCircle = null;
+let hasCenteredOnce = false;
+let watchId = null;
+
+if(!window.isSecureContext){
+  insecureBanner.style.display = 'block';
+  gpsLine.textContent = "GPS bloqueado: abre este archivo por https://, no directamente desde el teléfono.";
+}
+
+function updateUserMarker(lat, lng, acc){
+  if(!userMarker){
+    userMarker = L.circleMarker([lat,lng], {radius:8, color:'#1F3A2E', fillColor:'#2F6B4E', fillOpacity:.95, weight:2}).addTo(map);
+    userAccCircle = L.circle([lat,lng], {radius:acc, color:'#2F6B4E', weight:1, fillColor:'#2F6B4E', fillOpacity:.08}).addTo(map);
+  } else {
+    userMarker.setLatLng([lat,lng]);
+    userAccCircle.setLatLng([lat,lng]);
+    userAccCircle.setRadius(acc);
+  }
+}
+
+function requestLocation(center=false){
+  if(!window.isSecureContext) return; // ya se mostró el aviso arriba
+  gpsDot.classList.remove('locked');
+  gpsLine.textContent = "Buscando señal GPS (rápido)…";
+  if(!navigator.geolocation){
+    gpsLine.textContent = "Tu navegador no soporta geolocalización.";
+    return;
+  }
+  if(watchId !== null) navigator.geolocation.clearWatch(watchId);
+
+  const startWatch = (highAccuracy, timeout) => {
+    watchId = navigator.geolocation.watchPosition(
+      pos => {
+        coords = {lat:pos.coords.latitude, lng:pos.coords.longitude, acc:pos.coords.accuracy};
+        gpsDot.classList.add('locked');
+        gpsLine.textContent = `📍 ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)} · ±${Math.round(coords.acc)} m`;
+        updateUserMarker(coords.lat, coords.lng, coords.acc);
+        if(center || !hasCenteredOnce){
+          map.setView([coords.lat,coords.lng], 16);
+          hasCenteredOnce = true;
+        }
+      },
+      err => {
+        if(highAccuracy && err.code === 3){
+          // Sin GPS de alta precisión (típico en laptops): reintenta por
+          // triangulación WiFi, que es más lenta pero más tolerante.
+          gpsLine.textContent = "Sin GPS de alta precisión, intentando por red WiFi (hasta 30s)…";
+          navigator.geolocation.clearWatch(watchId);
+          startWatch(false, 30000);
+          return;
+        }
+        let msg = err.message;
+        if(err.code === 1) msg = "Permiso de ubicación denegado. Revisa los permisos del sitio en el navegador.";
+        if(err.code === 2) msg = "No se pudo determinar la posición. Prueba en un lugar abierto o conectado a WiFi.";
+        if(err.code === 3) msg = "Tiempo de espera agotado. En una laptop sin GPS, prueba con WiFi activo y sin VPN, o usa un celular para captura real en campo.";
+        gpsLine.textContent = msg;
+      },
+      {enableHighAccuracy:highAccuracy, timeout, maximumAge: highAccuracy ? 5000 : 60000}
+    );
+  };
+  startWatch(true, 8000);
+}
+requestLocation();
+document.getElementById('locateBtn').addEventListener('click', () => requestLocation(true));
+
+// ---------- Hoja inferior (bottom sheet) ----------
+const sheet = document.getElementById('sheet');
+const backdrop = document.getElementById('backdrop');
+function openSheet(){ sheet.classList.add('open'); backdrop.classList.add('open'); }
+function closeSheet(){ sheet.classList.remove('open'); backdrop.classList.remove('open'); }
+document.getElementById('openSheetBtn').addEventListener('click', openSheet);
+document.getElementById('closeSheetBtn').addEventListener('click', closeSheet);
+backdrop.addEventListener('click', closeSheet);
+
+// ---------- Foto ----------
+const photoBox = document.getElementById('photoBox');
+const fotoInput = document.getElementById('foto');
+const preview = document.getElementById('preview');
+photoBox.addEventListener('click', () => fotoInput.click());
+fotoInput.addEventListener('change', () => {
+  const file = fotoInput.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { preview.src = e.target.result; preview.style.display = 'block'; };
+  reader.readAsDataURL(file);
+});
+
+function fileToBase64(file){
+  return new Promise((resolve,reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+async function resolvePhotoValue(file){
+  if(!file) return "";
+  if(!CONFIG.APPS_SCRIPT_URL) return file.name; // fallback: solo el nombre, como tu ejemplo "foto1"
+  const base64 = await fileToBase64(file);
+  const res = await fetch(CONFIG.APPS_SCRIPT_URL, {
+    method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body: JSON.stringify({base64, filename:file.name, mimeType:file.type})
+  });
+  const data = await res.json();
+  if(!data.success) throw new Error(data.error || "Fallo al subir la foto");
+  return data.url;
+}
+
+function setStatus(kind, text){
+  const el = document.getElementById('status');
+  el.className = `status show ${kind}`;
+  el.textContent = text;
+}
+
+function validate(){
+  let ok = true;
+  document.getElementById('field-nombre').classList.remove('invalid');
+  document.getElementById('field-descripcion').classList.remove('invalid');
+  if(!document.getElementById('nombre').value.trim()){
+    document.getElementById('field-nombre').classList.add('invalid'); ok = false;
+  }
+  if(!document.getElementById('descripcion').value.trim()){
+    document.getElementById('field-descripcion').classList.add('invalid'); ok = false;
+  }
+  if(!coords){ setStatus('err', 'Aún no hay señal GPS. Espera un momento e inténtalo de nuevo.'); ok = false; }
+  return ok;
+}
+
+document.getElementById('captureForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if(!validate()) return;
+
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  setStatus('loading', 'Enviando registro…');
+
+  try{
+    const foto = await resolvePhotoValue(fotoInput.files[0]);
+    const now = new Date();
+
+    const gForm = document.createElement('form');
+    gForm.action = CONFIG.GOOGLE_FORM_ACTION;
+    gForm.method = "POST";
+    gForm.target = "hidden_iframe";
+
+    const values = {
+      [CONFIG.ENTRY.nombre]: document.getElementById('nombre').value.trim(),
+      [CONFIG.ENTRY.descripcion]: `${document.getElementById('descripcion').value.trim()} | GPS: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+      [CONFIG.ENTRY.foto]: foto,
+      [CONFIG.ENTRY.hora_hour]: now.getHours(),
+      [CONFIG.ENTRY.hora_minute]: now.getMinutes(),
+      [CONFIG.ENTRY.fecha_year]: now.getFullYear(),
+      [CONFIG.ENTRY.fecha_month]: now.getMonth()+1,
+      [CONFIG.ENTRY.fecha_day]: now.getDate()
+    };
+    for(const key in values){
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = key; input.value = values[key];
+      gForm.appendChild(input);
+    }
+    document.body.appendChild(gForm);
+
+    let iframe = document.getElementById('hidden_iframe');
+    if(!iframe){
+      iframe = document.createElement('iframe');
+      iframe.name = 'hidden_iframe'; iframe.id = 'hidden_iframe'; iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+    iframe.addEventListener('load', () => {
+      setStatus('ok', '✔ Registro enviado. Se sincroniza con el mapa en unos segundos.');
+      submitBtn.disabled = false;
+      document.getElementById('captureForm').reset();
+      preview.style.display = 'none';
+      setTimeout(() => { closeSheet(); loadRecords(); }, 1200);
+    }, {once:true});
+
+    gForm.submit();
+    gForm.remove();
+  }catch(err){
+    setStatus('err', 'Error al enviar: ' + err.message);
+    submitBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
