@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro de Campo Georreferenciado</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest:#1F3A2E;
+    --forest-dark:#12261D;
+    --ochre:#C9862F;
+    --ochre-light:#E6A94F;
+    --stone:#EAE7DD;
+    --paper:#FFFFFF;
+    --ink:#22261F;
+    --ink-soft:#5B6058;
+    --line:#D8D3C4;
+    --danger:#B3462F;
+    --ok:#2F6B4E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    background:var(--stone);
+    background-image:
+      repeating-radial-gradient(circle at 15% 20%, transparent 0 26px, rgba(31,58,46,0.05) 27px, transparent 28px),
+      repeating-radial-gradient(circle at 85% 75%, transparent 0 34px, rgba(31,58,46,0.045) 35px, transparent 36px);
+    min-height:100vh;
+    padding:32px 16px 64px;
+  }
+  .wrap{max-width:560px;margin:0 auto;}
+  header{margin-bottom:24px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ochre);
+    font-weight:600;
+  }
+  h1{
+    font-family:'Fraunces',serif;
+    font-size:clamp(28px,5vw,38px);
+    font-weight:700;
+    margin:6px 0 8px;
+    color:var(--forest-dark);
+    line-height:1.1;
+  }
+  .sub{color:var(--ink-soft);font-size:15px;line-height:1.5;max-width:460px;}
+
+  .gps-panel{
+    background:var(--forest);
+    border-radius:14px;
+    padding:18px 20px;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin:22px 0;
+    position:relative;
+    overflow:hidden;
+  }
+  .gps-panel::before{
+    content:"";
+    position:absolute;inset:0;
+    background:
+      linear-gradient(90deg, transparent 0 98%, rgba(255,255,255,.06) 100%),
+      repeating-linear-gradient(0deg, transparent 0 18px, rgba(255,255,255,.03) 19px);
+    pointer-events:none;
+  }
+  .dot{
+    width:14px;height:14px;border-radius:50%;
+    background:var(--ochre-light);
+    flex:none;
+    box-shadow:0 0 0 0 rgba(230,169,79,.6);
+    animation:pulse 1.6s infinite;
+  }
+  .dot.locked{animation:none;background:#7CD9A5;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(230,169,79,.55);}
+    70%{box-shadow:0 0 0 10px rgba(230,169,79,0);}
+    100%{box-shadow:0 0 0 0 rgba(230,169,79,0);}
+  }
+  .gps-text{font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.5;position:relative;z-index:1;}
+  .gps-text b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ochre-light);font-weight:600;margin-bottom:2px;}
+  .gps-retry{
+    margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.35);
+    color:#fff;font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;
+    border-radius:8px;cursor:pointer;position:relative;z-index:1;
+  }
+  .gps-retry:hover{border-color:var(--ochre-light);color:var(--ochre-light);}
+
+  form{
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:26px;
+  }
+  .field{margin-bottom:20px;}
+  label{
+    display:block;font-size:13px;font-weight:600;color:var(--forest-dark);margin-bottom:6px;
+  }
+  label .req{color:var(--danger);}
+  input[type="text"], textarea, select{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    padding:11px 13px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    background:#FBFAF7;
+    color:var(--ink);
+    transition:border-color .15s;
+  }
+  input:focus, textarea:focus, select:focus{
+    outline:none;border-color:var(--forest);background:#fff;
+  }
+  textarea{resize:vertical;min-height:80px;}
+  .hint{font-size:12px;color:var(--ink-soft);margin-top:5px;}
+  .error-msg{font-size:12px;color:var(--danger);margin-top:5px;display:none;}
+  .field.invalid input, .field.invalid textarea{border-color:var(--danger);}
+  .field.invalid .error-msg{display:block;}
+
+  .photo-box{
+    border:1.5px dashed var(--line);
+    border-radius:12px;
+    padding:16px;
+    text-align:center;
+    background:#FBFAF7;
+    cursor:pointer;
+  }
+  .photo-box:hover{border-color:var(--ochre);}
+  .photo-box input{display:none;}
+  #preview{
+    max-width:100%;
+    max-height:220px;
+    border-radius:8px;
+    margin-top:12px;
+    display:none;
+  }
+  .photo-label{font-size:13px;color:var(--ink-soft);}
+  .photo-label b{color:var(--forest-dark);}
+
+  .datetime{
+    font-family:'JetBrains Mono',monospace;
+    font-size:14px;
+    background:#FBFAF7;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    padding:11px 13px;
+    color:var(--ink-soft);
+  }
+
+  button.submit{
+    width:100%;
+    background:var(--ochre);
+    color:#fff;
+    border:none;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    padding:14px;
+    border-radius:10px;
+    cursor:pointer;
+    transition:background .15s, transform .1s;
+  }
+  button.submit:hover{background:#B7752A;}
+  button.submit:active{transform:scale(.99);}
+  button.submit:disabled{background:#C9BFA9;cursor:not-allowed;}
+
+  .status{
+    margin-top:16px;
+    font-size:13px;
+    padding:12px 14px;
+    border-radius:10px;
+    display:none;
+  }
+  .status.show{display:block;}
+  .status.ok{background:#EAF5EE;color:var(--ok);border:1px solid #BFE3CC;}
+  .status.err{background:#FBEAE6;color:var(--danger);border:1px solid #EFC4B7;}
+  .status.loading{background:#F1EEE3;color:var(--ink-soft);border:1px solid var(--line);}
+
+  footer{text-align:center;margin-top:26px;font-size:12px;color:var(--ink-soft);}
+  footer a{color:var(--forest);text-decoration:none;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ficha de campo · 001</div>
+    <h1>Registro georreferenciado</h1>
+    <p class="sub">Completa la ficha en el sitio. Tu posición y la hora quedan capturadas automáticamente; añade una fotografía y una breve descripción del hallazgo.</p>
+  </header>
+
+  <div class="gps-panel">
+    <div class="dot" id="gpsDot"></div>
+    <div class="gps-text" id="gpsText"><b>Ubicación</b>Solicitando acceso al GPS…</div>
+    <button class="gps-retry" id="gpsRetry" type="button">Reintentar</button>
+  </div>
+
+  <form id="captureForm">
+    <div class="field" id="field-nombre">
+      <label for="nombre">Nombre del registrador <span class="req">*</span></label>
+      <input type="text" id="nombre" placeholder="Ej. María Torres" autocomplete="name">
+      <div class="error-msg">Ingresa tu nombre.</div>
+    </div>
+
+    <div class="field" id="field-descripcion">
+      <label for="descripcion">Descripción del registro <span class="req">*</span></label>
+      <textarea id="descripcion" placeholder="Describe lo observado: tipo de elemento, estado, contexto…"></textarea>
+      <div class="error-msg">Agrega una descripción.</div>
+    </div>
+
+    <div class="field">
+      <label>Categoría</label>
+      <select id="categoria">
+        <option value="Infraestructura">Infraestructura</option>
+        <option value="Vegetación">Vegetación</option>
+        <option value="Fauna">Fauna</option>
+        <option value="Hidrología">Hidrología</option>
+        <option value="Suelo">Suelo</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Fecha y hora de captura</label>
+      <div class="datetime" id="datetimeBox">—</div>
+    </div>
+
+    <div class="field" id="field-foto">
+      <label>Fotografía</label>
+      <div class="photo-box" id="photoBox">
+        <input type="file" id="foto" accept="image/*" capture="environment">
+        <span class="photo-label"><b>Toca para tomar una foto</b><br>o seleccionar desde la galería</span>
+        <img id="preview" alt="Vista previa">
+      </div>
+      <div class="hint">Se sube automáticamente al enviar la ficha.</div>
+    </div>
+
+    <button type="submit" class="submit" id="submitBtn">Enviar registro</button>
+    <div class="status" id="status"></div>
+  </form>
+
+  <footer>Datos capturados con precisión GPS del dispositivo · <a href="mapa.html">Ver mapa de registros →</a></footer>
+</div>
+
+<!-- Iframe oculto usado para enviar a Google Forms sin recargar la página -->
+<iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
+<script>
+/* ====================================================================
+   CONFIGURACIÓN — reemplaza estos valores con los de tu propio proyecto
+   ==================================================================== */
+const CONFIG = {
+  // URL de envío de tu Google Form. Se obtiene reemplazando "viewform"
+  // por "formResponse" en el enlace de tu formulario.
+  GOOGLE_FORM_ACTION: "https://docs.google.com/forms/d/e/TU_FORM_ID/formResponse",
+
+  // IDs de entrada (entry.xxxxxxxxx) de cada pregunta del formulario.
+  ENTRY: {
+    nombre:      "entry.111111111",
+    descripcion: "entry.222222222",
+    categoria:   "entry.333333333",
+    fechaHora:   "entry.444444444",
+    latitud:     "entry.555555555",
+    longitud:    "entry.666666666",
+    fotoUrl:     "entry.777777777"
+  },
+
+  // URL del Web App de Apps Script que sube la foto a Drive y devuelve el enlace público.
+  APPS_SCRIPT_URL: "https://script.google.com/macros/s/TU_SCRIPT_ID/exec"
+};
+/* ==================================================================== */
+
+let coords = null;
+const gpsDot = document.getElementById('gpsDot');
+const gpsText = document.getElementById('gpsText');
+const datetimeBox = document.getElementById('datetimeBox');
+
+function stampDateTime(){
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const formatted = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  datetimeBox.textContent = formatted;
+  return formatted;
+}
+stampDateTime();
+setInterval(stampDateTime, 1000);
+
+if(!window.isSecureContext){
+  gpsText.innerHTML = "<b>GPS bloqueado</b>Abre este archivo por https:// (por ejemplo desde GitHub Pages), no directamente desde el disco.";
+}
+
+function requestLocation(){
+  if(!window.isSecureContext) return;
+  gpsDot.classList.remove('locked');
+  gpsText.innerHTML = "<b>Ubicación</b>Buscando señal GPS (rápido)…";
+  if(!navigator.geolocation){
+    gpsText.innerHTML = "<b>Ubicación</b>Tu navegador no soporta geolocalización.";
+    return;
+  }
+
+  const onSuccess = pos => {
+    coords = {lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy};
+    gpsDot.classList.add('locked');
+    gpsText.innerHTML = `<b>Ubicación capturada</b>${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)} · ±${Math.round(coords.acc)} m`;
+  };
+
+  const onFailFinal = err => {
+    let extra = "Revisa los permisos del navegador.";
+    if(err.code === 3) extra = "Sin chip GPS (como en una laptop), la ubicación por WiFi puede tardar o no estar disponible. Prueba conectado a WiFi (no solo cable), sin VPN, o usa un celular para captura real en campo.";
+    if(err.code === 1) extra = "Permiso denegado: habilita la ubicación para este sitio en la configuración del navegador.";
+    gpsText.innerHTML = `<b>No se pudo obtener la ubicación</b>${err.message}. ${extra}`;
+  };
+
+  // Intento 1: rápido y de alta precisión (ideal para celulares con GPS real).
+  navigator.geolocation.getCurrentPosition(
+    onSuccess,
+    () => {
+      // Intento 2: sin alta precisión, más tiempo — el modo que usan
+      // laptops sin GPS (triangulación por WiFi), que tarda más.
+      gpsText.innerHTML = "<b>Ubicación</b>Sin GPS de alta precisión, intentando por red WiFi (puede tardar hasta 30s)…";
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        onFailFinal,
+        {enableHighAccuracy:false, timeout:30000, maximumAge:60000}
+      );
+    },
+    {enableHighAccuracy:true, timeout:8000, maximumAge:0}
+  );
+}
+requestLocation();
+document.getElementById('gpsRetry').addEventListener('click', requestLocation);
+
+// --- Foto: selección y vista previa ---
+const photoBox = document.getElementById('photoBox');
+const fotoInput = document.getElementById('foto');
+const preview = document.getElementById('preview');
+photoBox.addEventListener('click', () => fotoInput.click());
+fotoInput.addEventListener('change', () => {
+  const file = fotoInput.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+});
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPhoto(file){
+  // Si no configuraste el Apps Script (ver README, paso 3), no intentamos
+  // la subida real a Drive y usamos solo el nombre del archivo como valor,
+  // para no bloquear el envío del formulario.
+  const scriptUrl = CONFIG.APPS_SCRIPT_URL || "";
+  if(!scriptUrl || scriptUrl.includes("TU_SCRIPT_ID")){
+    return file.name;
+  }
+  const base64 = await fileToBase64(file);
+  const res = await fetch(scriptUrl, {
+    method: "POST",
+    headers: {"Content-Type": "text/plain;charset=utf-8"}, // evita preflight CORS
+    body: JSON.stringify({
+      base64,
+      filename: file.name,
+      mimeType: file.type
+    })
+  });
+  const data = await res.json();
+  if(!data.success) throw new Error(data.error || "Fallo al subir la foto");
+  return data.url;
+}
+
+function setStatus(kind, text){
+  const el = document.getElementById('status');
+  el.className = `status show ${kind}`;
+  el.textContent = text;
+}
+
+function validate(){
+  let ok = true;
+  const nombre = document.getElementById('nombre');
+  const descripcion = document.getElementById('descripcion');
+
+  document.getElementById('field-nombre').classList.remove('invalid');
+  document.getElementById('field-descripcion').classList.remove('invalid');
+
+  if(!nombre.value.trim()){
+    document.getElementById('field-nombre').classList.add('invalid');
+    ok = false;
+  }
+  if(!descripcion.value.trim()){
+    document.getElementById('field-descripcion').classList.add('invalid');
+    ok = false;
+  }
+  if(!coords){
+    setStatus('err', 'Aún no se ha capturado tu ubicación GPS. Espera la señal o pulsa "Reintentar".');
+    ok = false;
+  }
+  return ok;
+}
+
+document.getElementById('captureForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if(!validate()) return;
+
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = true;
+  setStatus('loading', 'Enviando registro…');
+
+  try{
+    let fotoUrl = "";
+    const file = fotoInput.files[0];
+    if(file){
+      setStatus('loading', 'Subiendo fotografía…');
+      fotoUrl = await uploadPhoto(file);
+    }
+
+    const fechaHora = stampDateTime();
+
+    // Construir formulario oculto que apunta a Google Forms
+    const gForm = document.createElement('form');
+    gForm.action = CONFIG.GOOGLE_FORM_ACTION;
+    gForm.method = "POST";
+    gForm.target = "hidden_iframe";
+
+    const values = {
+      [CONFIG.ENTRY.nombre]: document.getElementById('nombre').value.trim(),
+      [CONFIG.ENTRY.descripcion]: document.getElementById('descripcion').value.trim(),
+      [CONFIG.ENTRY.categoria]: document.getElementById('categoria').value,
+      [CONFIG.ENTRY.fechaHora]: fechaHora,
+      [CONFIG.ENTRY.latitud]: coords.lat,
+      [CONFIG.ENTRY.longitud]: coords.lng,
+      [CONFIG.ENTRY.fotoUrl]: fotoUrl
+    };
+
+    for(const key in values){
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = values[key];
+      gForm.appendChild(input);
+    }
+
+    document.body.appendChild(gForm);
+
+    document.getElementById('hidden_iframe').addEventListener('load', () => {
+      setStatus('ok', '✔ Registro enviado correctamente. Puedes revisarlo en el mapa.');
+      submitBtn.disabled = false;
+      document.getElementById('captureForm').reset();
+      preview.style.display = 'none';
+      requestLocation();
+    }, {once:true});
+
+    gForm.submit();
+    gForm.remove();
+
+  }catch(err){
+    setStatus('err', 'Error al enviar: ' + err.message);
+    submitBtn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
