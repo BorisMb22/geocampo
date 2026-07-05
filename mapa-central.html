@@ -281,7 +281,11 @@ document.getElementById('lightboxDownload').addEventListener('click', async () =
   btn.textContent = 'Descargando…';
   btn.disabled = true;
   try{
-    const res = await fetch(lightboxCurrentUrl, {mode:'cors'});
+    // ImgBB no envía cabeceras CORS, así que un fetch directo a su imagen
+    // falla silenciosamente. wsrv.nl es un proxy gratuito de imágenes que
+    // sí las agrega, permitiéndonos leer los datos para la descarga.
+    const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(lightboxCurrentUrl)}`;
+    const res = await fetch(proxyUrl);
     if(!res.ok) throw new Error('No se pudo descargar la imagen');
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
