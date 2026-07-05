@@ -261,7 +261,10 @@ async function loadRecords(){
       const get = i => (c[i] && c[i].v !== null) ? c[i].v : "";
       const lat = parseFloat(get(CONFIG.COL.lat));
       const lng = parseFloat(get(CONFIG.COL.lng));
-      if(isNaN(lat) || isNaN(lng)) return;
+      // Ignora filas con coordenadas inválidas (ej. datos de prueba como
+      // "121" o "123123"), que harían que el mapa se aleje hasta ver
+      // todo el planeta al calcular los límites.
+      if(isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
       const marker = L.marker([lat,lng], {icon: makeIcon('#C9862F')});
       const foto = get(CONFIG.COL.foto);
       const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}">` : "";
