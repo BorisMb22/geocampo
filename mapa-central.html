@@ -193,12 +193,13 @@ const CONFIG = {
 
   // IDs de entrada tomados directamente de tu formulario real.
   // Se quitaron Latitud (entry.1951254240) y Longitud (entry.1143552526)
-  // como preguntas independientes, tal como pediste. Las coordenadas
-  // siguen capturándose por GPS y se envían integradas al final de la
-  // Descripción (así no se pierden para el mapa).
+  // IDs de entrada reales de tu formulario, incluyendo Latitud y Longitud
+  // ya restauradas como preguntas propias (mismos IDs de siempre).
   ENTRY: {
     nombre:       "entry.786287750",
     descripcion:  "entry.473747079",
+    latitud:      "entry.1951254240",
+    longitud:     "entry.1143552526",
     foto:         "entry.903131744",
     hora_hour:    "entry.2030021798_hour",
     hora_minute:  "entry.2030021798_minute",
@@ -217,13 +218,9 @@ const CONFIG = {
   SHEET_ID: "1XEJHMlpU8sAbzMxiUv1mCktXB4VJ9bQI4T3P43en27o",
   SHEET_GID: "2043451589", // tomado del &gid= en tu URL de Sheets
 
-  // Columnas tal como Google Forms las escribe en la hoja (orden de
-  // creación de las preguntas). Ajusta si el orden real difiere.
-  // Con Latitud y Longitud eliminadas del formulario, el orden real de
-  // columnas en la hoja queda: Marca temporal, Nombre, Descripción,
-  // Fecha, Hora, Fotografía. Las coordenadas se extraen del texto de la
-  // Descripción (se agregan automáticamente al enviar, ver más abajo).
-  COL: {timestamp:0, nombre:1, descripcion:2, fecha:3, hora:4, foto:5}
+  // Orden real de columnas en tu hoja: Marca temporal, Nombre,
+  // Descripción, Latitud, Longitud, Fecha, Hora, Fotografía.
+  COL: {timestamp:0, nombre:1, descripcion:2, lat:3, lng:4, fecha:5, hora:6, foto:7}
 };
 /* ======================================================================== */
 
@@ -262,13 +259,9 @@ async function loadRecords(){
     rows.forEach(row => {
       const c = row.c;
       const get = i => (c[i] && c[i].v !== null) ? c[i].v : "";
-      const descripcionFull = get(CONFIG.COL.descripcion) || "";
-      const gpsMatch = descripcionFull.match(/GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-      if(!gpsMatch) return;
-      const lat = parseFloat(gpsMatch[1]);
-      const lng = parseFloat(gpsMatch[2]);
+      const lat = parseFloat(get(CONFIG.COL.lat));
+      const lng = parseFloat(get(CONFIG.COL.lng));
       if(isNaN(lat) || isNaN(lng)) return;
-      const descripcionLimpia = descripcionFull.replace(/\s*\|?\s*GPS:.*$/,'').trim();
       const marker = L.marker([lat,lng], {icon: makeIcon('#C9862F')});
       const foto = get(CONFIG.COL.foto);
       const imgHtml = (foto && foto.startsWith('http')) ? `<img src="${foto}">` : "";
@@ -276,7 +269,7 @@ async function loadRecords(){
         <div class="popup-card">
           ${imgHtml}
           <h3>${get(CONFIG.COL.nombre) || 'Sin nombre'}</h3>
-          <p>${descripcionLimpia}</p>
+          <p>${get(CONFIG.COL.descripcion) || ''}</p>
           <div class="meta">📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}<br>🕒 ${get(CONFIG.COL.fecha)} ${get(CONFIG.COL.hora)}</div>
         </div>`);
       clusterGroup.addLayer(marker);
@@ -449,7 +442,9 @@ document.getElementById('captureForm').addEventListener('submit', async (e) => {
 
     const values = {
       [CONFIG.ENTRY.nombre]: document.getElementById('nombre').value.trim(),
-      [CONFIG.ENTRY.descripcion]: `${document.getElementById('descripcion').value.trim()} | GPS: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`,
+      [CONFIG.ENTRY.descripcion]: document.getElementById('descripcion').value.trim(),
+      [CONFIG.ENTRY.latitud]: coords.lat,
+      [CONFIG.ENTRY.longitud]: coords.lng,
       [CONFIG.ENTRY.foto]: foto,
       [CONFIG.ENTRY.hora_hour]: now.getHours(),
       [CONFIG.ENTRY.hora_minute]: now.getMinutes(),
