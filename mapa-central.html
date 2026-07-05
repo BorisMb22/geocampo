@@ -139,8 +139,8 @@
     font-family:'Inter',sans-serif;font-weight:600;font-size:14px;padding:10px 18px;
     border-radius:10px;border:none;cursor:pointer;text-decoration:none;
   }
-  .lightbox-actions a{background:var(--ochre);color:#fff;}
-  .lightbox-actions button{background:rgba(255,255,255,.12);color:#fff;}
+  .lightbox-actions a, #lightboxDownload{background:var(--ochre);color:#fff;}
+  .lightbox-actions button:not(#lightboxDownload){background:rgba(255,255,255,.12);color:#fff;}
   .popup-card h3{font-size:13.5px;margin:2px 0 4px;color:var(--forest-dark);}
   .popup-card p{font-size:12px;color:var(--ink-soft);margin:0 0 6px;line-height:1.4;}
   .popup-card .meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:5px;}
@@ -166,7 +166,7 @@
 <div class="lightbox-overlay" id="lightbox">
   <img id="lightboxImg" src="" alt="Foto del registro">
   <div class="lightbox-actions">
-    <a id="lightboxDownload" href="#" download target="_blank">⬇ Descargar</a>
+    <button type="button" id="lightboxDownload">⬇ Descargar</button>
     <button type="button" onclick="closeLightbox()">✕ Cerrar</button>
   </div>
 </div>
@@ -256,11 +256,12 @@ const CONFIG = {
 /* ======================================================================== */
 
 let coords = null;
+let lightboxCurrentUrl = "";
 
 // ---------- Visor de foto (lightbox) ----------
 window.openLightbox = function(url){
+  lightboxCurrentUrl = url;
   document.getElementById('lightboxImg').src = url;
-  document.getElementById('lightboxDownload').href = url;
   document.getElementById('lightbox').classList.add('open');
 };
 window.closeLightbox = function(){
@@ -268,6 +269,37 @@ window.closeLightbox = function(){
 };
 document.getElementById('lightbox').addEventListener('click', (e) => {
   if(e.target.id === 'lightbox') closeLightbox();
+});
+
+// La descarga directa con el atributo "download" no funciona en imágenes
+// de otro dominio (el navegador la ignora y solo navega a la imagen).
+// Por eso traemos la imagen como datos binarios y armamos el archivo
+// localmente — esto sí dispara una descarga real en PC, Android e iPhone.
+document.getElementById('lightboxDownload').addEventListener('click', async () => {
+  const btn = document.getElementById('lightboxDownload');
+  const originalText = btn.textContent;
+  btn.textContent = 'Descargando…';
+  btn.disabled = true;
+  try{
+    const res = await fetch(lightboxCurrentUrl, {mode:'cors'});
+    if(!res.ok) throw new Error('No se pudo descargar la imagen');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `geocampo_${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+  }catch(err){
+    // Respaldo: si el navegador bloquea el fetch (poco común), al menos
+    // abre la imagen en una pestaña nueva para guardarla manualmente.
+    window.open(lightboxCurrentUrl, '_blank');
+  }finally{
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
 });
 
 // ---------- Mapa (eje central de la pantalla) ----------
